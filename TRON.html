@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guntur Traffic</title>
+  <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <style>
+    #map {
+      height: 500px;
+      width: 100%;
+      border-radius: 10px;
+      box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .coordinates {
+      font-size: 16px;
+      font-weight: bold;
+      margin-top: 10px;
+      color: #6c757d;
+    }
+
+    body {
+      background-color: #f8f9fa;
+      font-family: 'Arial', sans-serif;
+    }
+
+    h1 {
+      margin-top: 20px;
+      margin-bottom: 20px;
+      color: #343a40;
+    }
+
+    .container {
+      margin-top: 20px;
+    }
+
+    .footer {
+      margin-top: 20px;
+      padding: 10px 0;
+      background-color: #343a40;
+      color: #fff;
+      text-align: center;
+    }
+
+    .school-list {
+      list-style-type: none;
+      padding: 0;
+      margin: 0;
+      max-height: 500px;
+      overflow-y: auto;
+      background-color: #fff;
+      border-radius: 10px;
+      box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .school-list li {
+      padding: 12px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .school-list li:hover {
+      background-color: #f1f1f1;
+    }
+
+    .school-list li.active {
+      background-color: #007bff;
+      color: #fff;
+    }
+
+    .infowindow-content {
+      font-size: 14px;
+      color: #333;
+    }
+
+    .infowindow-number {
+      font-weight: bold;
+      font-size: 16px;
+    }
+
+    /* Smooth transitions */
+    .coordinates,
+    h1,
+    .footer,
+    .school-list li {
+      transition: all 0.3s ease-in-out;
+    }
+
+    /* Traffic Color Legend Table */
+    .traffic-legend {
+      margin-top: 20px;
+    }
+
+    .traffic-legend table {
+      width: 100%;
+      background-color: #fff;
+      border-radius: 10px;
+      box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .traffic-legend th,
+    .traffic-legend td {
+      padding: 12px;
+      text-align: center;
+    }
+
+    .traffic-legend .color-box {
+      width: 20px;
+      height: 20px;
+      display: inline-block;
+    }
+
+    .traffic-legend .green {
+      background-color: green;
+    }
+
+    .traffic-legend .yellow {
+      background-color: yellow;
+    }
+
+    .traffic-legend .orange {
+      background-color: orange;
+    }
+
+    .traffic-legend .red {
+      background-color: red;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1 class="text-center">Guntur Traffic Data</h1>
+    <div class="row">
+      <div class="col-md-3">
+        <ul id="schoolList" class="school-list"></ul>
+      </div>
+      <div class="col-md-9">
+        <div id="map"></div>
+        <div class="coordinates text-center mt-3" id="mouseCoordinates"></div>
+      </div>
+    </div>
+
+    <!-- Traffic Color Legend Table -->
+    <div class="traffic-legend">
+      <table>
+        <thead>
+          <tr>
+            <th>Traffic Condition</th>
+            <th>Color</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Free Flow</td>
+            <td><div class="color-box green"></div></td>
+          </tr>
+          <tr>
+            <td>Moderate Traffic</td>
+            <td><div class="color-box yellow"></div></td>
+          </tr>
+          <tr>
+            <td>Heavy Traffic</td>
+            <td><div class="color-box orange"></div></td>
+          </tr>
+          <tr>
+            <td>Severe Traffic</td>
+            <td><div class="color-box red"></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <p>&copy; Guntur Traffic. All rights reserved.</p>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+
+  <script>
+    var map, markers = [], trafficLayers = [];
+    var tomTomApiKey = 'ArzPGYTOuFeCXxsVUTgdXIIxjELSvnnJ'; // Your TomTom API key
+    var selectedSchoolIndex = -1; // Variable to track the selected school
+
+    // DMS to Decimal conversion
+    function dmsToDecimal(degrees, minutes, seconds, direction) {
+      var decimal = degrees + minutes / 60 + seconds / 3600;
+      return direction === "S" || direction === "W" ? -decimal : decimal;
+    }
+
+    function initMap() {
+      // Initialize the map
+      map = L.map('map').setView([16.3067, 80.4365], 13); // Center on Guntur
+
+      // Add OpenStreetMap tile layer
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
+
+      var schools = [
+        { name: 'Patibandla Seetha Rammaya', lat: "16°18'43\"N", lng: "80°25'28\"E" },
+        { name: 'Poojitha High School', lat: "16°18'40\"N", lng: "80°24'59\"E" },
+        { name: 'Pattabhipuram High School', lat: "16°18'34\"N", lng: "80°24'56\"E" },
+        { name: 'Indian Springs Lakshmipuram', lat: "16°18'23\"N", lng: "80°24'35\"E" },
+        { name: 'Urdu Schools', lat: "16°17'38\"N", lng: "80°26'59\"E" },
+        { name: 'LFS', lat: "16°19'13\"N", lng: "80°25'36\"E" },
+        { name: 'Lotus Public School', lat: "16°18'28\"N", lng: "80°25'15\"E" },
+        { name: 'St. Annas High School', lat: "16°18'52\"N", lng: "80°26'16\"E" },
+        { name: 'Naveena Public Schools', lat: "16°19'36\"N", lng: "80°26'19\"E" },
+        { name: 'Axulium', lat: "16°18'56\"N", lng: "80°24'33\"E" },
+        { name: 'NRI Indian Springs', lat: "16°18'03\"N", lng: "80°27'01\"E" },
+        { name: 'Sumedha High School', lat: "16°18'01\"N", lng: "80°24'32\"E" },
+        { name: 'St. Joseph\'s High School (State Syllabus)', lat: "16°17'47\"N", lng: "80°26'27\"E" },
+        { name: 'STEM School', lat: "16°19'05\"N", lng: "80°25'37\"E" },
+        { name: 'GKR Public School', lat: "16°18'33\"N", lng: "80°24'59\"E" },
+        { name: 'Aadhya School - Be The Change', lat: "16°18'02\"N", lng: "80°26'18\"E" },
+        { name: 'Government School Israilpet', lat: "16°18'00\"N", lng: "80°27'37\"E" },
+        { name: 'Dr. KLP Public School - Guntur', lat: "16°19'16\"N", lng: "80°25'00\"E" },
+        { name: 'A.P. Open School Society Guntur', lat: "16°17'36\"N", lng: "80°26'58\"E" },
+        { name: 'Pearls High School Guntur', lat: "16°17'22\"N", lng: "80°27'34\"E" },
+        { name: 'St. Joseph\'s CBSE High School, Peda Kakani', lat: "16°19'50\"N", lng: "80°29'12\"E" },
+        { name: 'Oxford Public School Guntur', lat: "16°18'22\"N", lng: "80°27'10\"E" },
+        { name: 'Jain Public School', lat: "16°17'13\"N", lng: "80°26'51\"E" },
+        { name: 'Bharatiya Vidya Bhavan\'s Vidyashram (Affiliated to C.B.S.E.) Guntur', lat: "16°17'38\"N", lng: "80°25'50\"E" },
+        { name: 'Kanna Techno School Guntur', lat: "16°18'01\"N", lng: "80°27'56\"E" },
+        { name: 'Unik Public School', lat: "16°18'04\"N", lng: "80°26'44\"E" },
+        { name: 'Ananda Theertha Agraharam', lat: "16°17'58\"N", lng: "80°25'11\"E" },
+        { name: 'KSR Public School Guntur', lat: "16°16'34\"N", lng: "80°27'40\"E" },
+        { name: 'Kakatiya High School, Guntur', lat: "16°16'56\"N", lng: "80°24'42\"E" }
+      ];
+
+      // Populate the school list
+      var schoolList = document.getElementById('schoolList');
+      schools.forEach(function (school, index) {
+        var li = document.createElement('li');
+        li.textContent = school.name;
+        li.classList.add('school-item');
+        li.addEventListener('click', function () {
+          setActiveSchool(index);
+        });
+        schoolList.appendChild(li);
+
+        // Convert DMS to Decimal and place markers
+        var latLng = {
+          lat: dmsToDecimal(...school.lat.match(/(\d+)[°'"]+/g).map(x => parseInt(x)), school.lat.includes("S") ? "S" : "N"),
+          lng: dmsToDecimal(...school.lng.match(/(\d+)[°'"]+/g).map(x => parseInt(x)), school.lng.includes("W") ? "W" : "E")
+        };
+
+        var marker = L.marker([latLng.lat, latLng.lng]).addTo(map);
+        marker.bindPopup(`<strong>${school.name}</strong>`);
+
+        // Store markers for later reference
+        markers.push(marker);
+
+        marker.on('click', function () {
+          setActiveSchool(index); // Set this marker as active and fetch traffic data
+        });
+      });
+
+      map.on('mousemove', function (event) {
+        var lat = event.latlng.lat.toFixed(6);
+        var lng = event.latlng.lng.toFixed(6);
+        document.getElementById('mouseCoordinates').textContent = "Latitude: " + lat + ", Longitude: " + lng;
+      });
+
+      // Start polling for traffic data every 30 seconds
+      setInterval(refreshTrafficData, 30000);
+
+      // Fetch traffic data for the entire Guntur city
+      fetchTrafficForCity();
+    }
+
+    // Function to get traffic data for Guntur City by using multiple points in the area
+    function fetchTrafficForCity() {
+      var gridPoints = [
+        [16.3067, 80.4365],
+        [16.305, 80.430], 
+        [16.310, 80.445],
+        [16.315, 80.438],
+        // Add more grid points as necessary to cover the area
+      ];
+
+      gridPoints.forEach(function(point) {
+        getTrafficData({ lat: point[0], lng: point[1] }, "Guntur City", -1);
+      });
+    }
+
+    // Fetch traffic data from TomTom API and plot traffic flow on roads
+    function getTrafficData(latLng, name, index) {
+      var lat = latLng.lat;
+      var lng = latLng.lng;
+      var tomTomUrl = `https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json?key=${tomTomApiKey}&point=${lat},${lng}`;
+
+      fetch(tomTomUrl)
+        .then(response => response.json())
+        .then(data => {
+          if (data.flowSegmentData) {
+            var currentSpeed = data.flowSegmentData.currentSpeed;
+            var freeFlowSpeed = data.flowSegmentData.freeFlowSpeed;
+            var congestionLevel = getTrafficColor(currentSpeed, freeFlowSpeed);
+
+            // Clear any previous traffic layers
+            trafficLayers.forEach(function (layer) {
+              map.removeLayer(layer);
+            });
+            trafficLayers = [];
+
+            // Plot traffic flow on the roads
+            var coordinates = data.flowSegmentData.coordinates.coordinate;
+            var latlngs = coordinates.map(coord => [coord.latitude, coord.longitude]);
+
+            var trafficLayer = L.polyline(latlngs, {
+              color: congestionLevel,
+              weight: 6,
+              opacity: 0.7
+            }).addTo(map);
+
+            trafficLayers.push(trafficLayer);
+
+            if (index !== -1) {
+              updateTrafficInfo(name, congestionLevel, index);
+            }
+          }
+        })
+        .catch(error => console.error('Error fetching traffic data:', error));
+    }
+
+    // Determine the traffic congestion level color based on speed
+    function getTrafficColor(currentSpeed, freeFlowSpeed) {
+      var percentage = (currentSpeed / freeFlowSpeed) * 100;
+      if (percentage > 75) return 'green';
+      if (percentage > 50) return 'yellow';
+      if (percentage > 25) return 'orange';
+      return 'red';
+    }
+
+    // Update traffic info and change marker color
+    function updateTrafficInfo(name, trafficColor, index) {
+      var marker = markers[index];
+      marker.bindPopup(`<strong>${name}</strong><br>Traffic Color: ${trafficColor}`).openPopup();
+      marker.setIcon(L.divIcon({
+        className: 'custom-icon',
+        html: `<div style="background-color:${trafficColor}; width: 20px; height: 20px; border-radius: 50%;"></div>`
+      }));
+
+      // Zoom in when a school is clicked
+      map.setView(marker.getLatLng(), 15); // Adjust zoom level as needed
+    }
+
+    function setActiveSchool(index) {
+      selectedSchoolIndex = index; // Store the active school index
+
+      var listItems = document.querySelectorAll('#schoolList li');
+      listItems.forEach(function (li, i) {
+        li.classList.toggle('active', i === index);
+      });
+
+      // Zoom to the selected school marker
+      var marker = markers[index];
+      map.setView(marker.getLatLng(), 15); // Adjust zoom level as needed
+
+      // Fetch traffic data for the selected school
+      getTrafficData(marker.getLatLng(), markers[index].getPopup().getContent(), index);
+    }
+
+    // Refresh traffic data every 30 seconds
+    function refreshTrafficData() {
+      if (selectedSchoolIndex !== -1) {
+        var marker = markers[selectedSchoolIndex];
+        var latLng = marker.getLatLng();
+        getTrafficData(latLng, marker.getPopup().getContent(), selectedSchoolIndex);
+      }
+    }
+
+    initMap();
+  </script>
+</body>
+
+</html>
