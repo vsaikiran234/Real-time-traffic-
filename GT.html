@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guntur Traffic</title>
+  <script src="https://maps.googleapis.com/maps/api/js?key="ArzPGYTOuFeCXxsVUTgdXIIxjELSvnnJ"&libraries=visualization,places"></script>
+  <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    #map {
+      height: 500px;
+      width: 100%;
+      border-radius: 10px;
+      box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .coordinates {
+      font-size: 16px;
+      font-weight: bold;
+      margin-top: 10px;
+      color: #6c757d;
+    }
+
+    body {
+      background-color: #f8f9fa;
+      font-family: 'Arial', sans-serif;
+    }
+
+    h1 {
+      margin-top: 20px;
+      margin-bottom: 20px;
+      color: #343a40;
+    }
+
+    .container {
+      margin-top: 20px;
+    }
+
+    .footer {
+      margin-top: 20px;
+      padding: 10px 0;
+      background-color: #343a40;
+      color: #fff;
+      text-align: center;
+    }
+
+    .school-list {
+      list-style-type: none;
+      padding: 0;
+      margin: 0;
+      max-height: 500px;
+      overflow-y: auto;
+      background-color: #fff;
+      border-radius: 10px;
+      box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .school-list li {
+      padding: 12px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    .school-list li:hover {
+      background-color: #f1f1f1;
+    }
+
+    .school-list li.active {
+      background-color: #007bff;
+      color: #fff;
+    }
+
+    .infowindow-content {
+      font-size: 14px;
+      color: #333;
+    }
+
+    .infowindow-number {
+      font-weight: bold;
+      font-size: 16px;
+    }
+
+    /* Smooth transitions */
+    .coordinates,
+    h1,
+    .footer,
+    .school-list li {
+      transition: all 0.3s ease-in-out;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1 class="text-center">Guntur Traffic Data</h1>
+    <div class="row">
+      <div class="col-md-3">
+        <ul id="schoolList" class="school-list"></ul>
+      </div>
+      <div class="col-md-9">
+        <div id="map"></div>
+        <div class="coordinates text-center mt-3" id="mouseCoordinates"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>&copy; Guntur Traffic. All rights reserved.</p>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+  <script>
+    var map, schools, markers = [];
+    var trafficLayer;
+    var specialSchools = [
+      'Kanna Techno School Guntur',
+      'Axulium',
+      'Kakatiya High School, Guntur',
+      'Indian Springs Lakshmipuram',
+      'Pearls High School Guntur',
+      'Ananda Theertha Agraharam',
+      'Oxford Public School Guntur',
+      'STEM School',
+      'LFS'
+      // Added here
+    ];
+
+    function dmsToDecimal(degrees, minutes, seconds, direction) {
+      var decimal = degrees + minutes / 60 + seconds / 3600;
+      return direction === "S" || direction === "W" ? -decimal : decimal;
+    }
+
+    function decimalToDms(decimal) {
+      var deg = Math.floor(decimal);
+      var min = Math.floor((decimal - deg) * 60);
+      var sec = Math.floor((decimal - deg - min / 60) * 3600);
+      return deg + "°" + min + "'" + sec + "\"";
+    }
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 16.3067, lng: 80.4365 },
+        zoom: 13,
+      });
+
+      trafficLayer = new google.maps.TrafficLayer();
+      trafficLayer.setMap(map);
+
+      schools = [
+        { name: 'Patibandla Seetha Rammaya', lat: "16°18'43\"N", lng: "80°25'28\"E" },
+        { name: 'Poojitha High School', lat: "16°18'40\"N", lng: "80°24'59\"E" },
+        { name: 'Pattabhipuram High School', lat: "16°18'34\"N", lng: "80°24'56\"E" },
+        { name: 'Indian Springs Lakshmipuram', lat: "16°18'23\"N", lng: "80°24'35\"E" },
+        { name: 'Urdu Schools', lat: "16°17'38\"N", lng: "80°26'59\"E" },
+        { name: 'LFS', lat: "16°19'13\"N", lng: "80°25'36\"E" },
+        { name: 'Lotus Public School', lat: "16°18'28\"N", lng: "80°25'15\"E" },
+        { name: 'St. Annas High School', lat: "16°18'52\"N", lng: "80°26'16\"E" },
+        { name: 'Naveena Public Schools', lat: "16°19'36\"N", lng: "80°26'19\"E" },
+        { name: 'Axulium', lat: "16°18'56\"N", lng: "80°24'33\"E" },
+        { name: 'NRI Indian Springs', lat: "16°18'03\"N", lng: "80°27'01\"E" },
+        { name: 'Sumedha High School', lat: "16°18'01\"N", lng: "80°24'32\"E" },
+        { name: 'St. Joseph\'s High School (State Syllabus)', lat: "16°17'47\"N", lng: "80°26'27\"E" },
+        { name: 'STEM School', lat: "16°19'05\"N", lng: "80°25'37\"E" },
+        { name: 'GKR Public School', lat: "16°18'33\"N", lng: "80°24'59\"E" },
+        { name: 'Aadhya School - Be The Change', lat: "16°18'02\"N", lng: "80°26'18\"E" },
+        { name: 'Government School Israilpet', lat: "16°18'00\"N", lng: "80°27'37\"E" },
+        { name: 'Dr. KLP Public School - Guntur', lat: "16°19'16\"N", lng: "80°25'00\"E" },
+        { name: 'A.P. Open School Society Guntur', lat: "16°17'36\"N", lng: "80°26'58\"E" },
+        { name: 'Pearls High School Guntur', lat: "16°17'22\"N", lng: "80°27'34\"E" },
+        { name: 'St. Joseph\'s CBSE High School, Peda Kakani', lat: "16°19'50\"N", lng: "80°29'12\"E" },
+        { name: 'Oxford Public School Guntur', lat: "16°18'22\"N", lng: "80°27'10\"E" },
+        { name: 'Jain Public School', lat: "16°17'13\"N", lng: "80°26'51\"E" },
+        { name: 'Bharatiya Vidya Bhavan\'s Vidyashram (Affiliated to C.B.S.E.) Guntur', lat: "16°17'38\"N", lng: "80°25'50\"E" },
+        { name: 'Kanna Techno School Guntur', lat: "16°18'01\"N", lng: "80°27'56\"E" },
+        { name: 'Unik Public School', lat: "16°18'04\"N", lng: "80°26'44\"E" },
+        { name: 'Ananda Theertha Agraharam', lat: "16°17'58\"N", lng: "80°25'11\"E" },
+        { name: 'KSR Public School Guntur', lat: "16°16'34\"N", lng: "80°27'40\"E" },
+        { name: 'Kakatiya High School, Guntur', lat: "16°16'56\"N", lng: "80°24'42\"E" }
+      ];
+
+      var schoolList = document.getElementById('schoolList');
+      schools.forEach(function (school, index) {
+        var li = document.createElement('li');
+        li.textContent = school.name;
+        li.addEventListener('click', function () {
+          setActiveSchool(index);
+        });
+        schoolList.appendChild(li);
+      });
+
+      var infowindow = new google.maps.InfoWindow();
+
+      schools.forEach(function (school, index) {
+        var latLng = {
+          lat: dmsToDecimal(...school.lat.match(/(\d+)[°'"]+/g).map(x => parseInt(x)), school.lat.includes("S") ? "S" : "N"),
+          lng: dmsToDecimal(...school.lng.match(/(\d+)[°'"]+/g).map(x => parseInt(x)), school.lng.includes("W") ? "W" : "E")
+        };
+
+        var marker = new google.maps.Marker({
+          position: latLng,
+          map: map,
+          title: school.name,
+          label: (index + 1).toString(),
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 8,
+            fillColor: '#fff',
+            fillOpacity: 1,
+            strokeWeight: 2,
+            strokeColor: '#007bff'
+          }
+        });
+
+        marker.addListener('click', function () {
+          infowindow.setContent(`<div class="infowindow-content"><strong>${school.name}</strong><br><span class="infowindow-number">${(index + 1).toString()}</span> Coordinates: ${school.lat}, ${school.lng}</div>`);
+          infowindow.open(map, marker);
+          setActiveSchool(index);
+        });
+
+        markers.push(marker);
+      });
+
+      map.addListener('mousemove', function (event) {
+        var lat = event.latLng.lat().toFixed(6);
+        var lng = event.latLng.lng().toFixed(6);
+        document.getElementById('mouseCoordinates').textContent = " Latitude: " + lat + ", Longitude: " + lng;
+      });
+    }
+
+    function setActiveSchool(index) {
+      var listItems = document.querySelectorAll('#schoolList li');
+      listItems.forEach(function (li, i) {
+        li.classList.toggle('active', i === index);
+      });
+
+      var school = schools[index];
+      var coordinates = decimalToDms(markers[index].getPosition().lat()) + "N, " + decimalToDms(markers[index].getPosition().lng()) + "E";
+      document.getElementById('mouseCoordinates').textContent = "" + school.name + " | Coordinates: " + coordinates;
+
+      map.panTo(markers[index].getPosition());
+
+      if (specialSchools.includes(school.name)) {
+        map.setZoom(16);
+      } else {
+        map.setZoom(17);
+      }
+    }
+
+    initMap();
+  </script>
+</body>
+
+</html>
